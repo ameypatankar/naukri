@@ -1,0 +1,33 @@
+name: Daily Naukri Apply
+
+on:
+  schedule:
+    - cron: "0 13 * * *"  # 7 PM IST → 13:00 UTC
+  workflow_dispatch:  # Allows manual trigger from GitHub
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Naukri Script
+        run: python naukri_apply.py
+
+      - name: Upload Logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: naukri-logs
+          path: naukri_log.txt
