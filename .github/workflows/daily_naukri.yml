@@ -3,39 +3,43 @@ name: Daily Naukri Apply
 on:
   schedule:
     - cron: "0 13 * * *"  # 7 PM IST → 13:00 UTC
-  workflow_dispatch:
+  workflow_dispatch:      # Allows manual trigger
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
 
     steps:
-      - name: List files
-        run: ls -R
+      # 1️⃣ Checkout repository
       - name: Checkout Repo
         uses: actions/checkout@v3
 
+      # 2️⃣ Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
+      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # Install Selenium and ChromeDriver
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-chromedriver
+          pip install selenium openpyxl
 
+      # 4️⃣ Run Naukri script
       - name: Run Naukri Script
-        run: python naukri_apply.py  # Adjust path if inside a subfolder
+        run: |
+          python naukri_apply.py
 
-      - name: Upload Logs
+      # 5️⃣ Upload Excel and logs as artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: naukri-logs
-          path: naukri_log.txt
-
-      - name: Upload Excel
-        uses: actions/upload-artifact@v4
-        with:
-          name: applied-jobs
-          path: applied_jobs.xlsx
+          name: naukri-artifacts
+          path: |
+            applied_jobs.xlsx
+            naukri_log.txt
