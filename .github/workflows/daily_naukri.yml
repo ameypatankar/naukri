@@ -3,7 +3,7 @@ name: Daily Naukri Apply
 on:
   schedule:
     - cron: "0 13 * * *"  # 7 PM IST → 13:00 UTC
-  workflow_dispatch:  # Allows manual trigger from GitHub
+  workflow_dispatch:
 
 jobs:
   run-script:
@@ -24,10 +24,16 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Naukri Script
-        run: python naukri_apply.py
+        run: python naukri/naukri_apply.py  # Adjust path if inside a subfolder
 
       - name: Upload Logs
         uses: actions/upload-artifact@v4
         with:
           name: naukri-logs
           path: naukri_log.txt
+
+      - name: Upload Excel
+        uses: actions/upload-artifact@v4
+        with:
+          name: applied-jobs
+          path: applied_jobs.xlsx
