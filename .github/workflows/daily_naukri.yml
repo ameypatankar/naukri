@@ -24,7 +24,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Naukri Script
-        run: python naukri/naukri_apply.py  # Adjust path if inside a subfolder
+        run: python /naukri_apply.py  # Adjust path if inside a subfolder
 
       - name: Upload Logs
         uses: actions/upload-artifact@v4
