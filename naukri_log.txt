@@ -1,0 +1,41 @@
+2025-09-18 22:37:17,851 - INFO - Script started
+2025-09-18 22:37:17,858 - INFO - Loaded existing Excel: applied_jobs.xlsx
+2025-09-18 22:37:33,685 - INFO - Opening login page
+2025-09-18 22:37:37,049 - ERROR - Login error: 'NoneType' object is not iterable
+Traceback (most recent call last):
+  File "C:\Users\Amey\python\naukri\naukri_apply.py", line 371, in <module>
+    username_input.send_keys(NAUKRI_EMAIL)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\Users\Amey\anaconda3\Lib\site-packages\selenium\webdriver\remote\webelement.py", line 305, in send_keys
+    Command.SEND_KEYS_TO_ELEMENT, {"text": "".join(keys_to_typing(value)), "value": keys_to_typing(value)}
+                                                   ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Amey\anaconda3\Lib\site-packages\selenium\webdriver\common\utils.py", line 157, in keys_to_typing
+    characters.extend(val)
+    ~~~~~~~~~~~~~~~~~^^^^^
+TypeError: 'NoneType' object is not iterable
+2025-09-18 22:37:37,059 - ERROR - Fatal error during script execution
+Traceback (most recent call last):
+  File "C:\Users\Amey\python\naukri\naukri_apply.py", line 371, in <module>
+    username_input.send_keys(NAUKRI_EMAIL)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\Users\Amey\anaconda3\Lib\site-packages\selenium\webdriver\remote\webelement.py", line 305, in send_keys
+    Command.SEND_KEYS_TO_ELEMENT, {"text": "".join(keys_to_typing(value)), "value": keys_to_typing(value)}
+                                                   ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Amey\anaconda3\Lib\site-packages\selenium\webdriver\common\utils.py", line 157, in keys_to_typing
+    characters.extend(val)
+    ~~~~~~~~~~~~~~~~~^^^^^
+TypeError: 'NoneType' object is not iterable
+2025-09-18 22:37:39,871 - INFO - Script finished (final).
+2025-09-18 22:40:36,316 - INFO - Script started
+2025-09-18 22:40:36,356 - INFO - Loaded existing Excel: applied_jobs.xlsx
+2025-09-18 22:40:37,618 - INFO - Opening login page
+2025-09-18 22:40:40,697 - INFO - Login submitted
+2025-09-18 22:40:44,698 - INFO - Navigating to job search page
+2025-09-18 22:40:51,729 - INFO - Search executed
+2025-09-18 22:40:55,729 - INFO - Processing page 1
+2025-09-18 22:40:55,943 - INFO - Found job: 180925922790 | Experienced Software Engineer- Java Full stack | Boeing | Not Disclosed
+2025-09-18 22:40:59,266 - INFO - Skipped company-site job 180925922790
+2025-09-18 22:40:59,450 - INFO - Found job: 180925501994 | Senior Developer-SAP BTP Build Experience | SAP | Not Disclosed
+2025-09-18 22:41:02,559 - INFO - Skipped company-site job 180925501994
+2025-09-18 22:41:02,659 - INFO - Found job: 180925501954 | DET-Java Architect-GDSN01 | EY | Not Disclosed
+2025-09-18 22:41:06,936 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000020617EF2C10>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')': /session/e6d31d5516360f1eb0980a5c1092cd66

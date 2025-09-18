@@ -5,6 +5,7 @@ import time
 import sys
 import logging
 import openpyxl
+from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
@@ -20,6 +21,10 @@ from selenium.common.exceptions import (
     WebDriverException,
 )
 
+# ---------------- ENV SETUP ----------------
+# This will load environment variables from .env if present
+load_dotenv()
+
 # ---------------- CONFIG ----------------
 NAUKRI_EMAIL = os.getenv("NAUKRI_EMAIL")
 NAUKRI_PASSWORD = os.getenv("NAUKRI_PASSWORD")
@@ -29,7 +34,7 @@ EXCEL_FILE = os.getenv("EXCEL_FILE", "applied_jobs.xlsx")
 MIN_EXPECTED_SALARY = float(os.getenv("MIN_EXPECTED_SALARY", "25"))  # LPA
 MAX_APPLY = int(os.getenv("MAX_APPLY", "50"))  # Number of successful applications to reach
 CHROME_DRIVER_PATH = os.getenv("CHROME_DRIVER_PATH", "")  # optional path to chromedriver
-HEADLESS = True  # ✅ changed to True so browser runs headless
+HEADLESS = os.getenv("HEADLESS", "False").lower() == "true"
 
 LOGIN_URL = "https://www.naukri.com/nlogin/login"
 SEARCH_URL = "https://www.naukri.com/jobs-in-india"
