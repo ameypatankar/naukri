@@ -21,10 +21,10 @@ from selenium.common.exceptions import (
 )
 
 # ---------------- CONFIG ----------------
-NAUKRI_EMAIL = os.getenv("NAUKRI_EMAIL", "ameypatankar333@gmail.com")
-NAUKRI_PASSWORD = os.getenv("NAUKRI_PASSWORD", "9773051915")
-SKILLS = os.getenv("SKILLS", "Java and Spring Boot And React")
-EXPERIENCE = os.getenv("EXPERIENCE", "11")  # years
+NAUKRI_EMAIL = os.getenv("NAUKRI_EMAIL")
+NAUKRI_PASSWORD = os.getenv("NAUKRI_PASSWORD")
+SKILLS = os.getenv("SKILLS")
+EXPERIENCE = os.getenv("EXPERIENCE")  # years
 EXCEL_FILE = os.getenv("EXCEL_FILE", "applied_jobs.xlsx")
 MIN_EXPECTED_SALARY = float(os.getenv("MIN_EXPECTED_SALARY", "25"))  # LPA
 MAX_APPLY = int(os.getenv("MAX_APPLY", "50"))  # Number of successful applications to reach
@@ -34,7 +34,7 @@ HEADLESS = True  # ✅ changed to True so browser runs headless
 LOGIN_URL = "https://www.naukri.com/nlogin/login"
 SEARCH_URL = "https://www.naukri.com/jobs-in-india"
 
-TEXT_VALUE_FOR_BOT = "I have 11 yrs of experience and expecting 43L CTC"
+TEXT_VALUE_FOR_BOT = os.getenv("TEXT_VALUE_FOR_BOT")
 
 # ---------------- LOGGING ----------------
 logging.basicConfig(
