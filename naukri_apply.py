@@ -69,7 +69,16 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
 # ---------------- SELENIUM SETUP ----------------
 options = Options()
 if HEADLESS:
-    options.add_argument("--headless=new")
+    options = Options()
+    options.add_argument("--headless=new")        # modern headless mode
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--window-size=1920,1080")   # critical
+    options.add_argument("--remote-allow-origins=*") # GitHub Actions fix
+
 else:
     options.add_argument("--start-maximized")
 
@@ -98,11 +107,11 @@ except WebDriverException as e:
     print("ERROR: Could not start ChromeDriver:", e)
     sys.exit(1)
 
-wait = WebDriverWait(driver, 40)
+wait = WebDriverWait(driver, 30)
 actions = ActionChains(driver)
 
 # ---------------- HELPERS ----------------
-def safe_click(element, timeout=8):
+def safe_click(element, timeout=10):
     """Scroll to element, wait until it is clickable, then click via ActionChains."""
     try:
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
