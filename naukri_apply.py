@@ -59,8 +59,12 @@ existing_job_ids = {str(row[0]) for row in sheet.iter_rows(min_row=2, values_onl
 # ---------------- SELENIUM SETUP ----------------
 options = Options()
 if HEADLESS:
-    options.add_argument("--window-size=1920,1080")  # required for headless
-    options.add_argument("--headless=new")  # use new headless mode
+    options.add_argument("--headless=new")  # headless mode
+    options.add_argument("--no-sandbox")  # already there, needed for Linux CI
+    options.add_argument("--disable-dev-shm-usage")  # avoid shared memory issue
+    options.add_argument("--disable-gpu")  # required in some headless setups
+    options.add_argument("--window-size=1920,1080")  # force proper viewport
+    options.add_argument("--remote-debugging-port=9222")  # helps debugging
 else:
     options.add_argument("--start-maximized")
 
@@ -91,7 +95,7 @@ except WebDriverException as e:
     print("ERROR: Could not start ChromeDriver:", e)
     sys.exit(1)
 
-wait = WebDriverWait(driver, 25)
+wait = WebDriverWait(driver, 40)
 actions = ActionChains(driver)
 
 # ---------------- HELPERS ----------------
