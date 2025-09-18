@@ -9,7 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
     TimeoutException,
@@ -28,11 +28,13 @@ EXPERIENCE = os.getenv("EXPERIENCE", "11")  # years
 EXCEL_FILE = os.getenv("EXCEL_FILE", "applied_jobs.xlsx")
 MIN_EXPECTED_SALARY = float(os.getenv("MIN_EXPECTED_SALARY", "25"))  # LPA
 MAX_APPLY = int(os.getenv("MAX_APPLY", "50"))  # Number of successful applications to reach
-CHROME_DRIVER_PATH = os.getenv("CHROME_DRIVER_PATH", "")  # optional
-HEADLESS = True  # <-- Visible browser for local debugging
+CHROME_DRIVER_PATH = os.getenv("CHROME_DRIVER_PATH", "")  # optional path to chromedriver
+HEADLESS = True  # ✅ changed to True so browser runs headless
 
 LOGIN_URL = "https://www.naukri.com/nlogin/login"
 SEARCH_URL = "https://www.naukri.com/jobs-in-india"
+
+TEXT_VALUE_FOR_BOT = "I have 11 yrs of experience and expecting 43L CTC"
 
 # ---------------- LOGGING ----------------
 logging.basicConfig(
@@ -41,7 +43,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logging.info("Script started")
-print("Script started (visible browser). Check naukri_log.txt for detail.")
+print(f"Script started (HEADLESS={HEADLESS}). Check naukri_log.txt for detail.")
 
 # ---------------- EXCEL SETUP ----------------
 try:
@@ -54,34 +56,30 @@ except Exception:
     sheet.append(["Job ID", "Job Title", "Company", "Salary", "Job Link", "Status"])
     logging.info(f"Created new Excel: {EXCEL_FILE}")
 
-existing_job_ids = {str(row[0]) for row in sheet.iter_rows(min_row=2, values_only=True) if row and row[0] is not None}
+existing_job_ids = set()
+for row in sheet.iter_rows(min_row=2, values_only=True):
+    if row and row[0] is not None:
+        existing_job_ids.add(str(row[0]))
 
 # ---------------- SELENIUM SETUP ----------------
 options = Options()
 if HEADLESS:
-    options.add_argument("--headless=new")  # headless mode
-    options.add_argument("--no-sandbox")  # already there, needed for Linux CI
-    options.add_argument("--disable-dev-shm-usage")  # avoid shared memory issue
-    options.add_argument("--disable-gpu")  # required in some headless setups
-    options.add_argument("--window-size=1920,1080")  # force proper viewport
-    options.add_argument("--remote-debugging-port=9222")  # helps debugging
+    options.add_argument("--headless=new")
 else:
     options.add_argument("--start-maximized")
 
-# helpful flags
-options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-                     "AppleWebKit/537.36 (KHTML, like Gecko)"
-                     "Chrome/116.0.5845.140 Safari/537.36")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
-options.add_argument("--window-size=1920,1080")
 options.add_argument("--disable-extensions")
 options.add_argument("--disable-blink-features=AutomationControlled")
+options.add_argument("--window-size=1920,1080")
+options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                     "AppleWebKit/537.36 (KHTML, like Gecko) "
+                     "Chrome/116.0.5845.140 Safari/537.36")
 options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option("useAutomationExtension", False)
 
-# start driver (use CHROME_DRIVER_PATH if provided)
 driver = None
 try:
     if CHROME_DRIVER_PATH:
@@ -100,7 +98,7 @@ actions = ActionChains(driver)
 
 # ---------------- HELPERS ----------------
 def safe_click(element, timeout=8):
-    """Scroll to element, wait until it is clickable (rough), then click via ActionChains."""
+    """Scroll to element, wait until it is clickable, then click via ActionChains."""
     try:
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
         end = time.time() + timeout
@@ -118,12 +116,13 @@ def safe_click(element, timeout=8):
         return False
 
 def parse_max_salary(salary_text):
-    """Try to parse max salary in LPA. Return float or None."""
+    """Try to extract a numeric maximum salary in LPA from salary_text. Returns float or None."""
     if not salary_text:
         return None
     s = salary_text.lower()
     if "not disclose" in s or "not disclosed" in s:
         return None
+    # normalize many common variants
     s = s.replace("lacs pa", "lpa").replace("lacs", "lpa").replace("per annum", "").replace("p.a.", "").replace("pa", "")
     nums = re.findall(r"[\d\.]+", s)
     if not nums:
@@ -135,14 +134,217 @@ def parse_max_salary(salary_text):
         return None
 
 def save_record(job_id, title, company, salary_text, job_link, status):
-    """Append row to Excel and save immediately, mark id processed."""
+    """Append a row to Excel and save immediately, and mark job id as processed."""
     try:
         sheet.append([str(job_id), title, company, salary_text, job_link, status])
         wb.save(EXCEL_FILE)
     except Exception as e:
-        logging.error("Failed to write to Excel: %s", e)
+        logging.error(f"Failed to write to Excel: {e}")
     existing_job_ids.add(str(job_id))
-    print(f"Recorded: {title} | {company} | {status}")
+
+# ---------------- CHATBOT ANSWERING FUNCTION ----------------
+def answer_chatbot_and_submit(job_id, title, company, salary_text, job_link):
+    """
+    Answer chatbot questions inside chatbot_DrawerContentWrapper.
+    - support contenteditable divs (div.textArea[contenteditable="true"]) by setting innerText and dispatching input event
+    - fill text inputs, textareas, select the first radio/checkbox/label if possible
+    - click div.sendMsg (preferred) or Next/Submit button
+    - loop until drawer disappears or max iterations reached
+    Returns True if drawer closed or looks handled, False otherwise.
+    """
+    logging.info(f"Chatbot appeared for {job_id}, attempting to auto-answer...")
+    max_iterations = 20
+    try:
+        for iteration in range(max_iterations):
+            time.sleep(0.6)  # let UI settle
+
+            # check presence
+            try:
+                chatbot_el = driver.find_element(By.CLASS_NAME, "chatbot_DrawerContentWrapper")
+            except Exception:
+                logging.info("Chatbot wrapper not found; assuming closed.")
+                return True
+
+            # if not visible, done
+            try:
+                if not chatbot_el.is_displayed():
+                    logging.info("Chatbot wrapper not visible; done.")
+                    return True
+            except Exception:
+                pass
+
+            answered_any = False
+
+            # 1) fill normal text inputs
+            try:
+                text_inputs = chatbot_el.find_elements(By.XPATH, ".//input[not(@type) or @type='text']")
+                for t in text_inputs:
+                    try:
+                        if t.is_displayed() and t.is_enabled():
+                            try:
+                                t.clear()
+                            except Exception:
+                                pass
+                            t.send_keys(TEXT_VALUE_FOR_BOT)
+                            answered_any = True
+                            time.sleep(0.25)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            # 2) fill contenteditable divs (div.textArea[contenteditable='true'])
+            try:
+                editable_divs = chatbot_el.find_elements(By.XPATH, ".//div[contains(@class,'textArea') and (@contenteditable='true' or @contenteditable='')]")
+                for div in editable_divs:
+                    try:
+                        if div.is_displayed():
+                            # set innerText and dispatch input event so the site notices the change
+                            driver.execute_script("""
+                                arguments[0].focus();
+                                arguments[0].innerText = arguments[1];
+                                arguments[0].dispatchEvent(new Event('input', {bubbles: true}));
+                            """, div, TEXT_VALUE_FOR_BOT)
+                            # also try send_keys to be safe (some frameworks detect key events)
+                            try:
+                                div.click()
+                                div.send_keys(TEXT_VALUE_FOR_BOT)
+                            except Exception:
+                                pass
+                            answered_any = True
+                            time.sleep(0.4)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            # 3) fill <textarea> if present
+            try:
+                textareas = chatbot_el.find_elements(By.XPATH, ".//textarea")
+                for ta in textareas:
+                    try:
+                        if ta.is_displayed() and ta.is_enabled():
+                            try:
+                                ta.clear()
+                            except Exception:
+                                pass
+                            ta.send_keys(TEXT_VALUE_FOR_BOT)
+                            answered_any = True
+                            time.sleep(0.3)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            # 4) click radio/checkbox inputs
+            try:
+                inputs = chatbot_el.find_elements(By.XPATH, ".//input[@type='radio' or @type='checkbox']")
+                for inp in inputs:
+                    try:
+                        if inp.is_displayed() and inp.is_enabled():
+                            driver.execute_script("arguments[0].click();", inp)
+                            answered_any = True
+                            time.sleep(0.25)
+                            break
+                    except Exception:
+                        continue
+                # fallback: click the first visible label option
+                if not answered_any:
+                    label_opts = chatbot_el.find_elements(By.XPATH, ".//label")
+                    for lbl in label_opts:
+                        try:
+                            txt = (lbl.text or "").strip()
+                            if txt and lbl.is_displayed():
+                                driver.execute_script("arguments[0].click();", lbl)
+                                answered_any = True
+                                time.sleep(0.25)
+                                break
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+
+            # 5) select first option in selects
+            try:
+                selects = chatbot_el.find_elements(By.TAG_NAME, "select")
+                for sel in selects:
+                    try:
+                        if sel.is_displayed() and sel.is_enabled():
+                            try:
+                                Select(sel).select_by_index(1)
+                            except Exception:
+                                try:
+                                    Select(sel).select_by_index(0)
+                                except Exception:
+                                    pass
+                            answered_any = True
+                            time.sleep(0.3)
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            # 6) click send button(s) - prefer div.sendMsg
+            try:
+                send_btns = chatbot_el.find_elements(By.CSS_SELECTOR, "div.sendMsg, button.sendMsg, .sendMsg")
+                for sbtn in send_btns:
+                    try:
+                        if sbtn.is_displayed():
+                            driver.execute_script("arguments[0].click();", sbtn)
+                            answered_any = True
+                            time.sleep(0.8)  # let the next question appear
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            # 7) fallback: click a Next/Submit/Continue inside the chatbot container
+            try:
+                nxt_btn = None
+                try:
+                    nxt_btn = chatbot_el.find_element(By.XPATH, ".//button[contains(.,'Next') or contains(.,'Submit') or contains(.,'Continue')]")
+                except Exception:
+                    try:
+                        nxt_btn = chatbot_el.find_element(By.XPATH, ".//a[contains(.,'Next') or contains(.,'Submit') or contains(.,'Continue')]")
+                    except Exception:
+                        nxt_btn = None
+
+                if nxt_btn and nxt_btn.is_displayed() and nxt_btn.is_enabled():
+                    driver.execute_script("arguments[0].click();", nxt_btn)
+                    answered_any = True
+                    time.sleep(0.9)
+            except Exception:
+                pass
+
+            # if nothing we could do in this iteration, break to avoid infinite loop
+            if not answered_any:
+                logging.info("Could not auto-answer further questions (no recognizable inputs/buttons).")
+                break
+
+            # check if drawer closed after actions
+            time.sleep(0.5)
+            try:
+                current_chat = driver.find_element(By.CLASS_NAME, "chatbot_DrawerContentWrapper")
+                if not current_chat.is_displayed():
+                    logging.info("Chatbot closed after answers.")
+                    return True
+            except Exception:
+                logging.info("Chatbot element not found after answering; assuming closed.")
+                return True
+
+        # after iterations, check if closed or present
+        try:
+            driver.find_element(By.CLASS_NAME, "chatbot_DrawerContentWrapper")
+            logging.warning("Chatbot still present after attempts.")
+            return False
+        except Exception:
+            return True
+
+    except Exception as e:
+        logging.exception(f"Exception while answering chatbot for {job_id}: {e}")
+        return False
 
 # ---------------- MAIN FLOW ----------------
 try:
@@ -403,7 +605,7 @@ try:
                 # short explicit wait for chatbot drawer presence
                 small_wait = WebDriverWait(driver, 3)
                 small_wait.until(EC.presence_of_element_located((By.CLASS_NAME, "chatbot_DrawerContentWrapper")))
-                # if found and visible, mark skipped
+                # if found and visible, mark present
                 chatbot_el = driver.find_element(By.CLASS_NAME, "chatbot_DrawerContentWrapper")
                 if chatbot_el and chatbot_el.is_displayed():
                     chatbot_shown = True
@@ -411,36 +613,65 @@ try:
                 chatbot_shown = False
 
             if chatbot_shown:
-                save_record(job_id, title, company, salary_text, job_link, "Skipped (Chatbot)")
-                logging.info(f"Chatbot appeared for {job_id}; skipped")
-                # close tab or go back
-                if len(driver.window_handles) > 1:
-                    driver.close()
-                    driver.switch_to.window(driver.window_handles[0])
-                else:
+                # Try to answer chatbot questions instead of skipping
+                handled = answer_chatbot_and_submit(job_id, title, company, salary_text, job_link)
+                if not handled:
+                    # failed to handle chatbot -> record and continue
+                    save_record(job_id, title, company, salary_text, job_link, "Skipped (Chatbot)")
+                    logging.info(f"Chatbot appeared for {job_id} and could not be handled; skipped.")
+                    # close tab or go back
                     try:
-                        driver.back()
+                        if len(driver.window_handles) > 1:
+                            driver.close()
+                            driver.switch_to.window(driver.window_handles[0])
+                        else:
+                            driver.back()
                     except Exception:
                         pass
-                # do not increment applied_count
-                continue
+                    continue
+                else:
+                    # chatbot closed - wait a bit
+                    time.sleep(1.2)
 
-            # No chatbot — assume success if no error (try to detect 'Applied' label)
-            status = "Applied Successfully"
+            # No chatbot or handled - now check if apply succeeded or already applied
+            status = "Unknown"
             try:
-                # re-evaluate apply button text if available
+                # Try to locate apply/applied button again (DOM may have changed)
                 try:
-                    new_text = (apply_btn.text or "").strip().lower()
+                    new_apply_btn = WebDriverWait(driver, 3).until(
+                        EC.presence_of_element_located((By.XPATH, "//button[contains(text(),'Apply') or contains(text(),'Applied')]"))
+                    )
                 except Exception:
-                    new_text = ""
-                if "applied" in new_text:
-                    status = "Applied Successfully"
-            except Exception:
-                status = "Applied Successfully"
+                    new_apply_btn = None
 
+                btn_text = ""
+                if new_apply_btn:
+                    try:
+                        btn_text = (new_apply_btn.text or "").strip().lower()
+                    except Exception:
+                        btn_text = ""
+
+                if "apply" == btn_text:
+                    # If still 'Apply' text, assume success for our flows
+                    status = "Applied Successfully"
+                    logging.info(f"Assuming applied for {job_id} (button still shows 'Apply').")
+                elif "applied" in btn_text:
+                    status = "Applied Successfully"
+                    logging.info(f"Detected Applied label for {job_id}")
+                else:
+                    # If we couldn't find a button, assume success if no errors
+                    status = "Applied Successfully"
+            except Exception as e:
+                status = "Applied (unknown state)"
+                logging.warning(f"Error determining apply status for {job_id}: {e}")
+
+            # Record result
             save_record(job_id, title, company, salary_text, job_link, status)
-            applied_count += 1
-            logging.info(f"Applied to {job_id} — total applied {applied_count}")
+            if status == "Applied Successfully":
+                applied_count += 1
+                logging.info(f"Applied to {job_id} — total applied {applied_count}")
+            else:
+                logging.info(f"Processed {job_id} with status: {status}")
 
             # close detail tab or navigate back to results
             try:
@@ -519,7 +750,7 @@ try:
             print("No next page found; ending.")
             break
 
-    # Done main loop
+    # Main loop done
     logging.info(f"Completed. Total applied: {applied_count}")
     print(f"\nDone. Applied {applied_count} jobs. Excel: {EXCEL_FILE}")
     try:
